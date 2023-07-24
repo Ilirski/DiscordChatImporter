@@ -1,0 +1,6 @@
+pandas
+disnake
+pyimgur
+emoji
+python-dotenv
+beautifulsoup4
