@@ -4,6 +4,7 @@ new_channels/
 *.ipynb
 *.env
 *.csv
+*.csv/
 *.json
 __pycache__/
 *.py[cod]
