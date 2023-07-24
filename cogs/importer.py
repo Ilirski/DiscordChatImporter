@@ -5,7 +5,6 @@ import disnake
 from pathlib import Path
 from core.messages import MessageHandler
 from core.bot import ImportBot
-import os
 
 CHANNELS = [
     "discussion",
