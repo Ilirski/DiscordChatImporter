@@ -1,10 +1,10 @@
 archived_channels/
 avatars_hashed/
 new_channels/
-.ipynb
-.env
-.csv
-.json
+*.ipynb
+*.env
+*.csv
+*.json
 __pycache__/
 *.py[cod]
 *$py.class
