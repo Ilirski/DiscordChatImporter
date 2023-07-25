@@ -57,7 +57,7 @@ class Importer(commands.Cog):
 
         print(f"Channel: {channel}")
         await inter.response.send_message(
-            content=f"Processing messages in {channel}...",
+            content=f"Processing messages in `{channel}`...",
             ephemeral=True,
             delete_after=15,
         )

@@ -1,10 +1,20 @@
 import os
 import re
 import json
-from bs4 import BeautifulSoup, Tag
+import sys
+from bs4 import BeautifulSoup, Tag, NavigableString
 import urllib.parse
 import emoji
 from natsort import os_sorted
+
+
+def convert_to_bytes(size: str):
+    if size.endswith("KB"):
+        return float(size[:-3]) * 1024
+    elif size.endswith("MB"):
+        return float(size[:-3]) * 1024 * 1024
+    else:
+        return float(size[:-6])
 
 
 def parse_message_group(message_group):
@@ -14,9 +24,7 @@ def parse_message_group(message_group):
         # Only first message in message group has reference
         reference = parse_reference(message_group) if i == 0 else None
         parsed_messages.append(
-            parse_message(
-                messages[i], parse_author(message_group), reference
-            )
+            parse_message(messages[i], parse_author(message_group), reference)
         )
     return parsed_messages
 
@@ -75,51 +83,72 @@ def parse_message(message, author, reference):
     return message_to_add
 
 
+from bs4 import BeautifulSoup, Tag, NavigableString
+
+
+def process_img(node):
+    emote_name = str(node["alt"])
+    if emoji.is_emoji(emote_name):
+        return emote_name
+    else:
+        return ":" + emote_name + ":"
+
+
+def process_div(node, content):
+    classes = node.get("class", [])
+    if classes == ["quote"]:
+        return "> " + content
+    elif "pre--multiline" in classes:
+        return "```" + content + "```"
+    return content
+
+
+def process_span(node, content):
+    classes = node.get("class", [])
+    if "pre--inline" in classes:
+        return "`" + content + "`"
+    elif classes == ["spoiler"]:
+        return "||" + content + "||"
+    elif classes == ["mention"]:
+        if "title" in node.attrs:
+            return "`@" + node["title"] + "`"
+        else:
+            return "`" + content + "`"
+    return content
+
+
+def process_common_formatting(node, content):
+    common_formattings = {
+        "strong": "**" + content + "**",
+        "em": "*" + content + "*",
+        "u": "__" + content + "__",
+        "s": "~~" + content + "~~",
+    }
+    return common_formattings.get(node.name, content)
+
+
+tag_processors = {"img": process_img, "div": process_div, "span": process_span}
+
+
+def parse_node(node):
+    if isinstance(node, NavigableString):
+        return str(node)
+    elif isinstance(node, Tag):
+        content = "".join(parse_node(child) for child in node.contents)
+        if node.name in tag_processors:
+            content = tag_processors[node.name](node, content)
+        else:
+            content = process_common_formatting(node, content)
+        return content
+    else:
+        return ""
+
+
 def parse_message_content(content):
-    new_content = ""
     if content:
-        for i in content.children:
-            if type(i) == Tag:
-                if i.name == "img":
-                    # Emote
-                    emote_name = str(i["alt"])
-                    if emoji.is_emoji(emote_name):
-                        new_content = new_content + emote_name
-                    else:
-                        new_content = new_content + ":" + emote_name + ":"
-                elif i.name == "div" and i["class"] == ["quote"]:
-                    # Quote
-                    new_content = new_content + ">" + i.text
-                elif i.name == "div" and "pre--multiline" in i["class"]:
-                    # Multi-line code block
-                    new_content = new_content + "```" + i.text + "```"
-                elif i.name == "span" and "pre--inline" in i["class"]:
-                    # Inline code block
-                    new_content = new_content + "`" + i.text + "`"
-                elif i.name == "strong":
-                    # Bold
-                    new_content = new_content + "**" + i.text + "**"
-                elif i.name == "em":
-                    # Italics
-                    new_content = new_content + "*" + i.text + "*"
-                elif i.name == "u":
-                    # Underline
-                    new_content = new_content + "__" + i.text + "__"
-                elif i.name == "span" and i["class"] == ["spoiler"]:
-                    # Spoiler
-                    new_content = new_content + "||" + i.text + "||"
-                elif i.name == "span" and i["class"] == ["strike"]:
-                    # Strikethrough
-                    new_content = new_content + "~~" + i.text + "~~"
-                elif i.name == "span" and i["class"] == ["mention"]:
-                    # Mention
-                    new_content = new_content + '`' + i.text + '`'
-                else:
-                    # Anything else (links, etc)
-                    new_content = new_content + i.text
-            else:
-                new_content = new_content + str(i)
-    return new_content
+        return parse_node(content)
+    else:
+        return ""
 
 
 def parse_attachments(attachments):
@@ -140,11 +169,13 @@ def parse_attachments(attachments):
                 .get_text()
                 .strip()
             )  # TODO: Convert to bytes
+            generic_attachment_size = convert_to_bytes(generic_attachment_size)
+
             attachments_to_add.append(
                 {
-                    "url": generic_attachment_path,
+                    "file": generic_attachment_path,
                     "fileName": generic_attachment_name,
-                    "size": generic_attachment_size,
+                    "fileSizeBytes": generic_attachment_size,
                 }
             )
 
@@ -163,11 +194,12 @@ def parse_attachments(attachments):
             media_attachment_name = re.sub(
                 r"\(.*?\)", "", media_attachment_name
             ).strip()
+            media_attachment_size = convert_to_bytes(media_attachment_size)
             attachments_to_add.append(
                 {
                     "file": media_attachment_path,
                     "fileName": media_attachment_name,
-                    "size": media_attachment_size,
+                    "fileSizeBytes": media_attachment_size,
                 }
             )
     return attachments_to_add
@@ -233,16 +265,16 @@ def parse_embeds(embeds):
                             "isInline": bool(field_inline),
                         }
                     )
-                    
+
             author_json = {}
 
             embed_author = embed.find("span", "chatlog__embed-author-name")
             author_json["name"] = ""
             if embed_author:
                 author_json["name"] = embed_author.get_text().strip()
-                
+
             author_json["embed_author_url"] = None
-                
+
             embed_author_icon = embed.find("img", "chatlog__embed-author-icon")
             author_json["author_icon"] = None
             if embed_author_icon:
@@ -265,13 +297,21 @@ def save_json(data, file_name):
         json.dump(data, file, indent=4)
 
 
-def main():
+def main(folder_path):
     # List absolute path of directories in FOLDER_PATH
     directories = [
-        os.path.abspath(os.path.join(FOLDER_PATH, name))
-        for name in os.listdir(FOLDER_PATH)
-        if os.path.isdir(os.path.join(FOLDER_PATH, name))
+        os.path.abspath(os.path.join(folder_path, name))
+        for name in os.listdir(folder_path)
+        if os.path.isdir(os.path.join(folder_path, name))
     ]
+
+    # If the only subdirectories are those that end with .html_Files, just process the directory itself
+    if all(
+        name.endswith(".html_Files")
+        for name in os.listdir(folder_path)
+        if os.path.isdir(os.path.join(folder_path, name))
+    ):
+        directories = [folder_path]
 
     # Sort reverse alphabetically
     directories = sorted(directories, reverse=True)
@@ -327,5 +367,10 @@ def main():
 
 
 if __name__ == "__main__":
-    FOLDER_PATH = r"C:\Users\User\Downloads\IT\IT discord server archive\New folder (2)"
-    main()
+    # The first element of sys.argv list is always the script name itself
+    if len(sys.argv) < 2:
+        print("Usage: python script.py <folder_path>")
+        sys.exit(1)
+
+    folder_path = sys.argv[1]
+    main(folder_path)

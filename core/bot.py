@@ -1,3 +1,4 @@
+from __future__ import annotations
 from disnake import Activity, ActivityType, Intents
 import os
 from disnake.ext.commands import InteractionBot
@@ -14,7 +15,7 @@ class ImportBot(InteractionBot):
             activity=Activity(type=ActivityType.playing, name="around with disnake"),
         )
         self.COGS: list[str] = []
-        
+
         # Check if the settings file exists
         if os.path.isfile("settings.json"):
             with open("settings.json", "r") as f:
@@ -28,9 +29,12 @@ class ImportBot(InteractionBot):
         for file in os.listdir("./cogs"):
             if not file.startswith("_"):
                 self.COGS.append(f"cogs.{file}")
-                
+
     def save_settings(self):
-        settings = {"upload_files": self.upload_files, "choose_random_message": self.choose_random_message}
+        settings = {
+            "upload_files": self.upload_files,
+            "choose_random_message": self.choose_random_message,
+        }
         with open("settings.json", "w") as f:
             json.dump(settings, f)
 
