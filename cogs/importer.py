@@ -15,6 +15,7 @@ CHANNELS = [
     "philosophy",
     "quranic-sciences",
     "social-sciences",
+    "literature"
 ]
 
 
@@ -38,7 +39,7 @@ class Importer(commands.Cog):
         await inter.response.send_message(
             content=f"Processing messages in test...", ephemeral=True, delete_after=5
         )
-        await self.message_handler.process_messages(inter, data)
+        await self.message_handler.process_messages(inter, 0, data)
 
     @commands.slash_command(
         name="import",
@@ -49,9 +50,10 @@ class Importer(commands.Cog):
         self,
         inter: disnake.ApplicationCommandInteraction,
         channel: str = commands.Param(choices=CHANNELS),  # type: ignore
+        start_number: int = commands.Param(default=0),
     ):
         with open(
-            Path(__file__).parents[1].joinpath(f"archived_channels/{channel}.json"), "r"
+            Path(__file__).parents[1].joinpath(f"archived_channels/{channel}.json"), "r", encoding="utf-8"
         ) as f:
             data = json.load(f)
 
@@ -61,7 +63,7 @@ class Importer(commands.Cog):
             ephemeral=True,
             delete_after=15,
         )
-        await self.message_handler.process_messages(inter, data)
+        await self.message_handler.process_messages(inter, start_number, data)
 
     @commands.slash_command(name="show-hooks")
     async def show_hooks(self, inter: disnake.ApplicationCommandInteraction):

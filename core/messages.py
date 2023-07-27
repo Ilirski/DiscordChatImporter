@@ -71,7 +71,9 @@ class MessageHandler:
             referenced_message = await webhook.channel.fetch_message(reference_id)  # type: ignore
             user_reference_url = referenced_message.jump_url
             user_reference_label = referenced_message.author.display_name
-            message_reference_label: str = referenced_message.content[:80]  # 80 chars limit
+            message_reference_label: str = referenced_message.content[
+                :80
+            ]  # 80 chars limit
             if len(referenced_message.content) == 0:
                 message_reference_label = "No message content"
 
@@ -128,7 +130,6 @@ class MessageHandler:
                 file_links.add(file_link.strip())
                 await notif.delete()
 
-
             # Pray to God that the message is not too long
             message["content"] += "\n" + "\n".join(file_links)
 
@@ -149,7 +150,7 @@ class MessageHandler:
             embeds=embeds,
             wait=True,
         )
-        
+
         # TODO: What to do with broken links with no embeds that used to have embeds?
         # Type below in history html 2
         # https://twitter.com/depthsofwiki/status/1463637178509139968
@@ -199,7 +200,8 @@ class MessageHandler:
                 embed_to_send.add_field(
                     name=field["name"], value=field["value"], inline=field["isInline"]
                 )
-            embed_to_send.set_footer(text=embed["footer"]["text"])
+            if "footer" in embed:
+                embed_to_send.set_footer(text=embed["footer"]["text"])
             embeds.append(embed_to_send)
 
         return await webhook.send(
@@ -245,7 +247,9 @@ class MessageHandler:
         if message["isPinned"]:
             await posted_message.pin()
 
-    async def process_messages(self, inter: ApplicationCommandInteraction, data):
+    async def process_messages(
+        self, inter: ApplicationCommandInteraction, start_number, data
+    ):
         if not isinstance(inter.channel, TextChannel):
             await inter.send(
                 f"ERROR: Cannot import messages to {type(inter.channel)}, channel must be TextChannel."
@@ -262,6 +266,11 @@ class MessageHandler:
         start = 0
         if self.choose_random_message:
             start = random.randint(int(number_of_messages // 1.2), number_of_messages)
+        if self.choose_random_message and start_number > 0:
+            start = start_number
+        if start_number > 0:
+            start = start_number
+
         print(f"Starting from message {start+1} / {number_of_messages}")
         print(f"Number of messages: {number_of_messages}")
         try:
@@ -289,7 +298,7 @@ class MessageHandler:
                         await self.handle_message(webhook, message)
                 except Exception as e:
                     await self.channel.send(
-                        f"Error while processing message no. {i+1}/{number_of_messages} in #{data['channel']['name']}:\n```{e}```"
+                        f"{self.interactor.mention} Error while processing message no. {i+1}/{number_of_messages} in #{data['channel']['name']}:\n```{e}```"
                     )
                     raise e
                 finally:

@@ -10,3 +10,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 .vscode/
+*.tsv
+format_json/literature_files
+download_literature_files.py

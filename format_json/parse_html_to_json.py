@@ -86,7 +86,7 @@ def parse_message(message, author, reference):
 from bs4 import BeautifulSoup, Tag, NavigableString
 
 
-def process_img(node):
+def process_img(node, content):
     emote_name = str(node["alt"])
     if emoji.is_emoji(emote_name):
         return emote_name
@@ -179,14 +179,38 @@ def parse_attachments(attachments):
                 }
             )
 
-        media_attachment = attachment.find("img", "chatlog__attachment-media")
-        if media_attachment:
+        img_media_attachment = attachment.find("img", "chatlog__attachment-media")
+        if img_media_attachment:
             media_attachment_path = urllib.parse.unquote(
-                media_attachment["src"]
+                img_media_attachment["src"]
             ).replace("/", "\\")
             media_attachment_path = os.path.join(SUBFOLDER_PATH, media_attachment_path)
-            media_attachment_name = media_attachment["title"]
+            media_attachment_name = img_media_attachment["title"]
             # Strip first 7 characters (e.g. "Image: ")
+            media_attachment_name = media_attachment_name[7:]
+            # Get text between brackets (e.g. "(4.2 MB)")
+            media_attachment_size = re.findall(r"\((.*?)\)", media_attachment_name)[0]
+            # Strip text between brackets
+            media_attachment_name = re.sub(
+                r"\(.*?\)", "", media_attachment_name
+            ).strip()
+            media_attachment_size = convert_to_bytes(media_attachment_size)
+            attachments_to_add.append(
+                {
+                    "file": media_attachment_path,
+                    "fileName": media_attachment_name,
+                    "fileSizeBytes": media_attachment_size,
+                }
+            )
+
+        vid_media_attachment = attachment.find("video", "chatlog__attachment-media")
+        if vid_media_attachment:
+            media_attachment_path = urllib.parse.unquote(
+                vid_media_attachment.find("source")["src"]
+            ).replace("/", "\\")
+            media_attachment_path = os.path.join(SUBFOLDER_PATH, media_attachment_path)
+            media_attachment_name = vid_media_attachment.find("source")["title"]
+            # Strip first 7 characters (e.g. "Video: ")
             media_attachment_name = media_attachment_name[7:]
             # Get text between brackets (e.g. "(4.2 MB)")
             media_attachment_size = re.findall(r"\((.*?)\)", media_attachment_name)[0]
