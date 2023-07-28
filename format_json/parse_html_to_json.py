@@ -146,7 +146,7 @@ def process_span(node, content):
     classes = node.get("class", [])
     if "pre--inline" in classes:
         return "`" + content + "`"
-    elif classes == ["spoiler"]:
+    elif "spoiler-text" in classes:
         return "||" + content + "||"
     elif classes == ["mention"]:
         if "title" in node.attrs:
