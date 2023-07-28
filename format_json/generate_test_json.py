@@ -17,6 +17,7 @@ def create_json_object(
     embeds=[],
     attachments=[],
     reference="",
+    reactions=[],
 ):
     if embeds:
         isBot = True
@@ -29,6 +30,7 @@ def create_json_object(
         "author": {"name": author, "avatarUrl": avatarUrl, "isBot": isBot},
         "embeds": embeds,
         "attachments": attachments,
+        "reactions": reactions,
     }
 
     if reference:
@@ -85,6 +87,99 @@ big_attachment = {
     "fileSizeBytes": 70500000,
 }
 
+strong = {
+    "emoji": {
+        "id": "",
+        "name": "thinkW",
+        "code": "thinkW",
+        "isAnimated": False,
+        "imageUrl": "C:\\Users\\User\\Downloads\\IT\\IT discord server archive\\New folder (2)\\quranic-sciences\\Islamic Thought - Serious - quranic-sciences [722979883000791171].html_Files\\1f44d-B3F5F.svg",
+    },
+    "count": 1,
+}
+
+broken = {
+    "emoji": {
+        "id": "",
+        "name": "none",
+        "code": "none",
+        "isAnimated": False,
+        "imageUrl": "C:\\Users\\User\\Downloads\\IT\\IT discord server archive\\New folder (2)\\quranic-sciences\\Islamic Thought - Serious - quranic-sciences [722979883000791171].html_Files\\1f44d-B3F5F.svg",
+    },
+    "count": 1,
+}
+
+create_json_object(
+    "This is a normal message with a reaction :thinkW::thinkW:", reactions=[strong]
+)
+create_json_object(
+    "This is a normal message with a broken reaction :lulz::thinkW::thinkW:", reactions=[broken, strong, strong]
+)
+create_json_object(
+    "This is a normal message with 5 reactions :thinkW: :thinkW:",
+    reactions=[strong, strong, strong, strong, strong],
+)
+create_json_object(
+    "This is a normal message with 10 reactions",
+    reactions=[
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+    ],
+)
+create_json_object(
+    "This is a normal message with 20 reactions",
+    reactions=[
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+    ],
+)
+create_json_object(
+    "Reply to a message.",
+    reference=test_channel["messages"][0]["id"],
+    reactions=[strong],
+)
+create_json_object(
+    "Reply to a message with reactions",
+    reference=test_channel["messages"][0]["id"],
+    reactions=[
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+        strong,
+    ],
+)
 create_json_object("This is a normal message.")
 create_json_object("This is a pinned message.", isPinned=True)
 create_json_object("This message is from a bot.", isBot=True)
@@ -119,5 +214,5 @@ create_json_object(long_message_attachment, attachments=[attachment])
 create_json_object("Very big attachment.", attachments=[attachment, big_attachment])
 
 # Save the test data to a json file
-with open("test.json", "w") as file:
+with open("test.json", "w", encoding="utf") as file:
     json.dump(test_channel, file, indent=4)

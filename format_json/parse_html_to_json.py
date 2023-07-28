@@ -15,6 +15,9 @@ def convert_to_bytes(size: str):
         return float(size[:-3]) * 1024 * 1024
     else:
         return float(size[:-6])
+    
+def clean_and_join_url(sub_folder_path, url):
+    return os.path.join(SUBFOLDER_PATH, *urllib.parse.unquote(url).split("/"))
 
 
 def parse_message_group(message_group):
@@ -66,11 +69,12 @@ def parse_message(message, author, reference):
 
     message_to_add["embeds"] = []
     if author["isBot"]:
-        embed = message.find_all(
+        # Right now I do not care about non-bot embeds. Maybe in the future
+        embeds = message.find_all(
             "div", "chatlog__embed"
-        )  # TODO: Handle multiple embeds
-        embed_to_add = parse_embeds(embed)
-        message_to_add["embeds"] = embed_to_add
+        )
+        embeds_to_add = parse_embeds(embeds)
+        message_to_add["embeds"] = embeds_to_add
 
     message_to_add["attachments"] = parse_attachments(
         message.find_all("div", "chatlog__attachment")
@@ -80,11 +84,46 @@ def parse_message(message, author, reference):
     if reference:
         message_to_add["reference"] = reference
 
+    message_to_add["reactions"] = parse_reactions(
+        message.find("div", "chatlog__reactions")
+    )
+    
+    # "reactions": [
+    #     {
+    #       "emoji": {
+    #         "id": "",
+    #         "name": "⭐",
+    #         "code": "star",
+    #         "isAnimated": false,
+    #         "imageUrl": "https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/svg/2b50.svg"
+    #       },
+    #       "count": 8
+    #     }
+    #   ],
+
     return message_to_add
 
-
-from bs4 import BeautifulSoup, Tag, NavigableString
-
+def parse_reactions(reactions):
+    reactions_to_add = []
+    if reactions:
+        reactions = reactions.find_all("div", "chatlog__reaction")
+        for reaction in reactions:
+            reaction_to_add = {}
+            img_path = reaction.find("img")["src"]
+            emoji_id = img_path[img_path.rfind("/") + 1:img_path.rfind(".")]
+            emoji_id = emoji_id[:emoji_id.rfind("-")]
+            reaction_to_add["emoji"] = {}
+            reaction_to_add["emoji"]["id"] = ""
+            if len(emoji_id) == 18:
+                # Custom emoji
+                reaction_to_add["emoji"]["id"] = emoji_id
+            reaction_to_add["emoji"]["name"] = reaction.find("img")["alt"]
+            reaction_to_add["emoji"]["code"] = reaction.find("img")["alt"]
+            reaction_to_add["emoji"]["isAnimated"] = False # Don't know how check
+            reaction_to_add["emoji"]["imageUrl"] = clean_and_join_url(SUBFOLDER_PATH, img_path)
+            reaction_to_add["count"] = int(reaction.find("span", "chatlog__reaction-count").get_text().strip())
+            reactions_to_add.append(reaction_to_add)
+    return reactions_to_add
 
 def process_img(node, content):
     emote_name = str(node["alt"])
@@ -151,81 +190,71 @@ def parse_message_content(content):
         return ""
 
 
+def parse_attachment(attachment, tag_name, class_name, is_generic=False):
+    media_attachment = attachment.find(tag_name, class_name)
+    if media_attachment:
+        if is_generic:
+            media_attachment_path = urllib.parse.unquote(
+                media_attachment.find("a")["href"]
+            ).replace("/", "\\")
+            media_attachment_path = os.path.join(SUBFOLDER_PATH, media_attachment_path)
+            media_attachment_name = media_attachment.find("a").get_text().strip()
+            media_attachment_size = (
+                media_attachment.find("div", "chatlog__attachment-generic-size")
+                .get_text()
+                .strip()
+            )
+        else:
+            media_attachment_path = urllib.parse.unquote(
+                media_attachment["src"]
+                if tag_name == "img"
+                else media_attachment.find("source")["src"]
+            ).replace("/", "\\")
+            media_attachment_path = os.path.join(SUBFOLDER_PATH, media_attachment_path)
+            media_attachment_name = (
+                media_attachment["title"]
+                if tag_name == "img"
+                else media_attachment.find("source")["title"]
+            )
+            media_attachment_size = re.findall(r"\((.*?)\)", media_attachment_name)[0]
+            media_attachment_name = re.sub(
+                r"\(.*?\)", "", media_attachment_name
+            ).strip()
+        media_attachment_size = convert_to_bytes(media_attachment_size)
+        return {
+            "file": media_attachment_path,
+            "fileName": media_attachment_name,
+            "fileSizeBytes": media_attachment_size,
+        }
+    return None
+
+
 def parse_attachments(attachments):
     attachments_to_add = []
     for attachment in attachments:
-        generic_attachment = attachment.find("div", "chatlog__attachment-generic")
+        generic_attachment = parse_attachment(
+            attachment, "div", "chatlog__attachment-generic", True
+        )
+        img_media_attachment = parse_attachment(
+            attachment, "img", "chatlog__attachment-media"
+        )
+        vid_media_attachment = parse_attachment(
+            attachment, "video", "chatlog__attachment-media"
+        )
+        aud_media_attachment = parse_attachment(
+            attachment, "audio", "chatlog__attachment-media"
+        )
         if generic_attachment:
-            # <a> tag in <div> tag
-            generic_attachment_path = urllib.parse.unquote(
-                generic_attachment.find("a")["href"]
-            ).replace("/", "\\")
-            generic_attachment_path = os.path.join(
-                SUBFOLDER_PATH, generic_attachment_path
-            )
-            generic_attachment_name = generic_attachment.find("a").get_text().strip()
-            generic_attachment_size = (
-                generic_attachment.find("div", "chatlog__attachment-generic-size")
-                .get_text()
-                .strip()
-            )  # TODO: Convert to bytes
-            generic_attachment_size = convert_to_bytes(generic_attachment_size)
+            attachments_to_add.append(generic_attachment)
+        elif img_media_attachment:
+            attachments_to_add.append(img_media_attachment)
+        elif vid_media_attachment:
+            attachments_to_add.append(vid_media_attachment)
+        elif aud_media_attachment:
+            attachments_to_add.append(aud_media_attachment)
+        else:
+            raise Exception(f"Unknown attachment type: {attachment}")
 
-            attachments_to_add.append(
-                {
-                    "file": generic_attachment_path,
-                    "fileName": generic_attachment_name,
-                    "fileSizeBytes": generic_attachment_size,
-                }
-            )
-
-        img_media_attachment = attachment.find("img", "chatlog__attachment-media")
-        if img_media_attachment:
-            media_attachment_path = urllib.parse.unquote(
-                img_media_attachment["src"]
-            ).replace("/", "\\")
-            media_attachment_path = os.path.join(SUBFOLDER_PATH, media_attachment_path)
-            media_attachment_name = img_media_attachment["title"]
-            # Strip first 7 characters (e.g. "Image: ")
-            media_attachment_name = media_attachment_name[7:]
-            # Get text between brackets (e.g. "(4.2 MB)")
-            media_attachment_size = re.findall(r"\((.*?)\)", media_attachment_name)[0]
-            # Strip text between brackets
-            media_attachment_name = re.sub(
-                r"\(.*?\)", "", media_attachment_name
-            ).strip()
-            media_attachment_size = convert_to_bytes(media_attachment_size)
-            attachments_to_add.append(
-                {
-                    "file": media_attachment_path,
-                    "fileName": media_attachment_name,
-                    "fileSizeBytes": media_attachment_size,
-                }
-            )
-
-        vid_media_attachment = attachment.find("video", "chatlog__attachment-media")
-        if vid_media_attachment:
-            media_attachment_path = urllib.parse.unquote(
-                vid_media_attachment.find("source")["src"]
-            ).replace("/", "\\")
-            media_attachment_path = os.path.join(SUBFOLDER_PATH, media_attachment_path)
-            media_attachment_name = vid_media_attachment.find("source")["title"]
-            # Strip first 7 characters (e.g. "Video: ")
-            media_attachment_name = media_attachment_name[7:]
-            # Get text between brackets (e.g. "(4.2 MB)")
-            media_attachment_size = re.findall(r"\((.*?)\)", media_attachment_name)[0]
-            # Strip text between brackets
-            media_attachment_name = re.sub(
-                r"\(.*?\)", "", media_attachment_name
-            ).strip()
-            media_attachment_size = convert_to_bytes(media_attachment_size)
-            attachments_to_add.append(
-                {
-                    "file": media_attachment_path,
-                    "fileName": media_attachment_name,
-                    "fileSizeBytes": media_attachment_size,
-                }
-            )
     return attachments_to_add
 
 
@@ -235,10 +264,16 @@ def parse_embeds(embeds):
     if embeds:
         for embed in embeds:
             embed_to_add = {}
-            embed_title = embed.find("div", "chatlog__embed-title")
+            embed_title_link = embed.find("div", "chatlog__embed-title-link")
             embed_to_add["title"] = ""
-            if embed_title:
-                embed_to_add["title"] = embed_title.get_text().strip()
+            if embed_title_link:
+                embed_to_add["title"] = embed_title_link.get_text().strip()
+                embed_to_add["url"] = embed_title_link["href"]
+            else:
+                embed_title = embed.find("div", "chatlog__embed-title")
+                if embed_title:
+                    embed_to_add["title"] = embed_title.get_text().strip()
+
 
             embed_description = embed.find("div", "chatlog__embed-description")
             embed_to_add["description"] = ""

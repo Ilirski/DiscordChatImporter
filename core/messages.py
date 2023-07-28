@@ -1,8 +1,6 @@
 import json
 from disnake import (
     ApplicationCommandInteraction,
-    Thread,
-    PartialMessageable,
     Webhook,
     NotFound,
     ButtonStyle,
@@ -10,20 +8,19 @@ from disnake import (
     Embed,
     Color,
     File,
-    User,
     TextChannel,
 )
-from disnake.ui import Button
+from disnake.ui import Button, ActionRow
 from pathlib import Path
 import random
+import emoji
+import re
 
 
 class FileTooLarge(Exception):
     def __init__(self, message, files):
         self.message: str = message
         self.files: set = files
-        self.interactor: User
-        self.channel: TextChannel
 
     def __str__(self):
         return f"{self.message}: {self.files}"
@@ -32,12 +29,41 @@ class FileTooLarge(Exception):
 class MessageHandler:
     MESSAGE_CHARACTER_LIMIT = 2000
     FILE_SIZE_LIMIT = 0
+    REGIONAL_INDICATORS: set[str] = {
+        "🇦",
+        "🇧",
+        "🇨",
+        "🇩",
+        "🇪",
+        "🇫",
+        "🇬",
+        "🇭",
+        "🇮",
+        "🇯",
+        "🇰",
+        "🇱",
+        "🇲",
+        "🇳",
+        "🇴",
+        "🇵",
+        "🇶",
+        "🇷",
+        "🇸",
+        "🇹",
+        "🇺",
+        "🇻",
+        "🇼",
+        "🇽",
+        "🇾",
+        "🇿",
+    }
 
     def __init__(self, upload_files, choose_random_message):
         self.upload_files = upload_files
         self.choose_random_message = choose_random_message
         self.message_history: dict[str, str] = self.load_history("message_history.json")
         self.channel_history: dict[str, int] = self.load_history("channel_history.json")
+        self.emote_history: dict[str, str] = self.load_history("emote_history.json")
 
     @staticmethod
     def load_history(file_name):
@@ -63,8 +89,8 @@ class MessageHandler:
     async def send_reply(
         self, webhook: Webhook, message, author, avatar_url, reference_id
     ):
-        files = await self.upload_attachments(message)
-        embeds = await self.embed_attachments(message)
+        files = self.upload_attachments(message["attachments"], self.upload_files)
+        embeds = self.embed_attachments(message["attachments"], self.upload_files)
 
         # Read the message that is being referenced
         try:
@@ -84,18 +110,12 @@ class MessageHandler:
             message_reference_label = "Message not found"
             disabled = True
 
-        return await webhook.send(
-            message["content"],
-            username=author,
-            avatar_url=avatar_url,
-            files=files,
-            embeds=embeds,
-            components=[
+        components = [
+            ActionRow(
                 Button(
                     style=ButtonStyle.url,
                     label=user_reference_label,
                     url=user_reference_url,
-                    #   emoji=disnake.partial_emoji.PartialEmoji(name=""),
                     disabled=disabled,
                 ),
                 Button(
@@ -104,13 +124,31 @@ class MessageHandler:
                     custom_id="message_reference",
                     disabled=disabled,
                 ),
-            ],
+            )
+        ]
+
+        # Add reactions to the message, if any
+        components.extend(self.process_reactions(message["reactions"]))
+
+        return await webhook.send(
+            message["content"],
+            username=author,
+            avatar_url=avatar_url,
+            files=files,
+            embeds=embeds,
+            components=components,
             wait=True,
         )
 
     async def send_default(self, webhook: Webhook, message, author, avatar_url):
+        embeds = []
+        files = []
+        reactions = []
+
         try:
-            files = await self.upload_attachments(message)
+            files = self.upload_attachments(message["attachments"], self.upload_files)
+            reactions = self.process_reactions(message["reactions"])
+            embeds = self.embed_attachments(message["attachments"], self.upload_files)
         except FileTooLarge as e:
             # Remove files that are too large from files
             files = [
@@ -140,14 +178,27 @@ class MessageHandler:
                 files=files,
                 wait=True,
             )
+        except FileNotFoundError as e:
+            files = []
+            files_not_found = []
+            for f in message["attachments"]:
+                if r"https:\\cdn.discordapp.com\attachments" in f["file"]:
+                    files_not_found.append(f)
+                else:
+                    files.append(File(f["file"], filename=f["fileName"]))
 
-        embeds = await self.embed_attachments(message)
+            if files_not_found:
+                embeds = self.embed_attachments(files_not_found, False)
+                for embed in embeds:
+                    embed.title = "The following file could not be found"
+
         return await webhook.send(
             message["content"],
             username=author,
             avatar_url=avatar_url,
             files=files,
             embeds=embeds,
+            components=reactions,
             wait=True,
         )
 
@@ -155,18 +206,47 @@ class MessageHandler:
         # Type below in history html 2
         # https://twitter.com/depthsofwiki/status/1463637178509139968
 
-    async def embed_attachments(self, message):
-        if self.upload_files:
+    def process_reactions(self, reactions) -> list[ActionRow]:
+        action_rows: list[ActionRow] = []
+        reactions_to_add = []
+
+        for reaction in reactions:
+            reactions_to_add.append((reaction["emoji"]["name"], reaction["count"]))
+
+        # TODO: Limit to 5 action rows (or 4)
+        for reaction in reactions_to_add:
+            if len(action_rows) == 0:
+                action_rows.append(ActionRow())
+            if len(action_rows[-1].children) == 5:
+                action_rows.append(ActionRow())
+            if emoji.is_emoji(reaction[0]) or reaction[0] in self.REGIONAL_INDICATORS:
+                reaction_label = reaction[1]
+                reaction_emoji = reaction[0]
+            elif reaction[0] in self.emote_history:
+                reaction_label = reaction[1]
+                reaction_emoji = self.emote_history[reaction[0]]
+            else:
+                reaction_label = f":{reaction[0]}: {reaction[1]}"
+                reaction_emoji = None
+            action_rows[-1].add_button(
+                style=ButtonStyle.secondary,
+                label=reaction_label,
+                emoji=reaction_emoji,
+            )
+
+        return action_rows
+
+    def embed_attachments(self, attachments, upload_files):
+        if upload_files:
             return []
 
         return [
             Embed(title="File uploaded", description=f"`{f['fileName']}`")
-            for f in message["attachments"]
+            for f in attachments
         ]
 
-    async def upload_attachments(self, message):
-        attachments = message["attachments"]
-        if attachments and not self.upload_files:
+    def upload_attachments(self, attachments, upload_files):
+        if attachments and not upload_files:
             return []
 
         attachments_too_large = [
@@ -178,7 +258,12 @@ class MessageHandler:
         if attachments_too_large:
             raise FileTooLarge("File too large", attachments_too_large)
 
-        return [File(f["file"], filename=f["fileName"]) for f in attachments]
+        files = []
+        for f in attachments:
+            if r"https:\\cdn.discordapp.com\attachments" in f["file"]:
+                raise FileNotFoundError("File is a link.")
+            files.append(File(f["file"], filename=f["fileName"]))
+        return files
 
     async def send_bot(self, webhook: Webhook, message, author, avatar_url):
         embeds: list[Embed] = []
@@ -190,6 +275,13 @@ class MessageHandler:
             embed_to_send = Embed(
                 color=Color.from_rgb(r, g, b),
             )
+
+            if "title" in embed:
+                embed_to_send.title = embed["title"]
+
+            if "description" in embed:
+                embed_to_send.description = embed["description"]
+
             if "author" in embed:
                 embed_to_send.set_author(
                     name=embed["author"]["name"],
@@ -280,6 +372,11 @@ class MessageHandler:
 
                 # Nitro users be like:
                 text = message["content"]
+                emotes = re.findall(r'\:(\S*?)\:', text)
+                for emote in emotes:
+                    print(emote)
+                    if emote in self.emote_history:
+                        text = text.replace(f":{emote}:", self.emote_history[emote])
                 payloads = self.create_payloads(text)
 
                 try:
