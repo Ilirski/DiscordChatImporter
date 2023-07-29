@@ -86,6 +86,15 @@ class MessageHandler:
         second_part = text[len(first_part) :].lstrip()
         return [first_part, second_part]
 
+    def parse_emotes_in_replies(self, text):
+        pattern = r'<:([^:>]*):[^>]*>'
+
+        def replace_func(match):
+            return ':' + match.group(1) + ':'
+
+        text = re.sub(pattern, replace_func, text)
+        return text
+
     async def send_reply(
         self, webhook: Webhook, message, author, avatar_url, reference_id
     ):
@@ -97,9 +106,7 @@ class MessageHandler:
             referenced_message = await webhook.channel.fetch_message(reference_id)  # type: ignore
             user_reference_url = referenced_message.jump_url
             user_reference_label = referenced_message.author.display_name
-            message_reference_label: str = referenced_message.content[
-                :80
-            ]  # 80 chars limit
+            message_reference_label: str = self.parse_emotes_in_replies(referenced_message.content)[:80]
             if len(referenced_message.content) == 0:
                 message_reference_label = "No message content"
 
@@ -331,8 +338,13 @@ class MessageHandler:
             posted_message = await self.send_default(
                 webhook, message, author, avatar_url
             )
-
-        print(f"Posted message: {posted_message.author.name}: {posted_message.content}")
+        print(
+            f"{posted_message.author.name}: {posted_message.content}"
+        )
+        if posted_message.embeds:
+            print(f"Embeds:\n{[embed.title for embed in posted_message.embeds]}")
+        if posted_message.attachments:
+            print(f"Attachments:\n{[attachment.filename for attachment in posted_message.attachments]}")
         # Map the message id to the posted message id
         self.message_history[message["id"]] = str(posted_message.id)
 
@@ -372,9 +384,8 @@ class MessageHandler:
 
                 # Nitro users be like:
                 text = message["content"]
-                emotes = re.findall(r'\:(\S*?)\:', text)
+                emotes = set(re.findall(r"\:(\S*?)\:", text))  # Avoid duplicate emotes
                 for emote in emotes:
-                    print(emote)
                     if emote in self.emote_history:
                         text = text.replace(f":{emote}:", self.emote_history[emote])
                 payloads = self.create_payloads(text)
@@ -402,7 +413,9 @@ class MessageHandler:
                     self.save_to_file("message_history.json", self.message_history)
                     self.save_to_file("channel_history.json", self.channel_history)
             # Done
-            print("Done")
+            print(
+                f"Finished processing {number_of_messages} messages in #{data['channel']['name']}"
+            )
             await self.channel.send(
                 f"{self.interactor.mention} Finished importing all {number_of_messages} messages.",
                 mention_author=True,
