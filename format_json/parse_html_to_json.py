@@ -42,6 +42,8 @@ def parse_reference(message_group):
 def parse_author(message_group):
     author_json = {}
     author_json["name"] = message_group.find("span", "chatlog__author-name")["title"]
+    if "discord" in author_json["name"]:
+        author_json["name"] = author_json["name"].replace("discord", "disc*rd") # discord cannot appear in the name
     avatar_url = message_group.find("img", "chatlog__author-avatar")
     author_json["avatarUrl"] = os.path.join(
         SUBFOLDER_PATH, urllib.parse.unquote(avatar_url["src"]).replace("/", "\\")
