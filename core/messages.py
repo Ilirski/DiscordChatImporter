@@ -329,6 +329,10 @@ class MessageHandler:
 
         if is_bot:
             posted_message = await self.send_bot(webhook, message, author, avatar_url)
+        elif message["embeds"] and not message["content"]:
+            posted_message = await self.send_bot(
+                webhook, message, author, avatar_url
+            )
         # Either message has reply or no reply
         elif reference_id:
             posted_message = await self.send_reply(
