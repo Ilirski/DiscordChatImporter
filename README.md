@@ -13,9 +13,10 @@ Discord Chat Importer allows you to import archived chats (JSON/HTML) saved with
 ## Example:
 ![image](https://github.com/Ilirski/DiscordChatImporter/assets/24876805/f19f0340-264c-4137-ab17-e3af9ab37693)
 ![image](https://github.com/Ilirski/DiscordChatImporter/assets/24876805/a816d50d-a00d-426b-a329-8bf804fee873)
-![image](https://github.com/Ilirski/DiscordChatImporter/assets/24876805/27f788de-ee2c-4221-85ea-f87fd8217703)
+![image](https://github.com/Ilirski/DiscordChatImporter/assets/24876805/fa636dd2-7022-4b98-b3e0-747b4dd1de95)
 
 ## TODO:
 - Messages with embeds and message content are not scraped. Only embed-only messages are posted. This is because I'm not sure what to do with link embeds.
-- An easier way of parsing HTML to JSON, uploading the profile pics to imgurs, and mapping custom emotes to their available equivalents
+- An easier way of parsing HTML to JSON, uploading the profile pics to imgurs, and mapping custom emotes to their available equivalents.
+- Guide on how to use this repo.
 
