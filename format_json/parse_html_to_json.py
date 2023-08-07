@@ -15,7 +15,8 @@ def convert_to_bytes(size: str):
         return float(size[:-3]) * 1024 * 1024
     else:
         return float(size[:-6])
-    
+
+
 def clean_and_join_url(sub_folder_path, url):
     return os.path.join(SUBFOLDER_PATH, *urllib.parse.unquote(url).split("/"))
 
@@ -39,11 +40,18 @@ def parse_reference(message_group):
     return {"messageId": re.findall(r"'(\d+)'", message_id["onclick"])[0]}
 
 
+def replace(match):
+    word = match.group()
+    return word[0:4] + "*" + word[5:]
+
+
 def parse_author(message_group):
     author_json = {}
     author_json["name"] = message_group.find("span", "chatlog__author-name")["title"]
-    if "discord" in author_json["name"]:
-        author_json["name"] = author_json["name"].replace("discord", "disc*rd") # discord cannot appear in the name
+    if re.search(r"discord", author_json["name"], re.IGNORECASE):
+        author_json["name"] = re.sub(
+            r"discord", replace, author_json["name"], flags=re.IGNORECASE
+        )
     avatar_url = message_group.find("img", "chatlog__author-avatar")
     author_json["avatarUrl"] = os.path.join(
         SUBFOLDER_PATH, urllib.parse.unquote(avatar_url["src"]).replace("/", "\\")
@@ -70,13 +78,11 @@ def parse_message(message, author, reference):
     message_to_add["author"] = author
 
     message_to_add["embeds"] = []
-    if author["isBot"]:
-        # Right now I do not care about non-bot embeds. Maybe in the future
-        embeds = message.find_all(
-            "div", "chatlog__embed"
-        )
-        embeds_to_add = parse_embeds(embeds)
-        message_to_add["embeds"] = embeds_to_add
+    # if author["isBot"]:
+    # Right now I do not care about non-bot embeds. Maybe in the future
+    embeds = message.find_all("div", "chatlog__embed")
+    embeds_to_add = parse_embeds(embeds)
+    message_to_add["embeds"] = embeds_to_add
 
     message_to_add["attachments"] = parse_attachments(
         message.find_all("div", "chatlog__attachment")
@@ -89,7 +95,7 @@ def parse_message(message, author, reference):
     message_to_add["reactions"] = parse_reactions(
         message.find("div", "chatlog__reactions")
     )
-    
+
     # "reactions": [
     #     {
     #       "emoji": {
@@ -105,6 +111,7 @@ def parse_message(message, author, reference):
 
     return message_to_add
 
+
 def parse_reactions(reactions):
     reactions_to_add = []
     if reactions:
@@ -112,8 +119,8 @@ def parse_reactions(reactions):
         for reaction in reactions:
             reaction_to_add = {}
             img_path = reaction.find("img")["src"]
-            emoji_id = img_path[img_path.rfind("/") + 1:img_path.rfind(".")]
-            emoji_id = emoji_id[:emoji_id.rfind("-")]
+            emoji_id = img_path[img_path.rfind("/") + 1 : img_path.rfind(".")]
+            emoji_id = emoji_id[: emoji_id.rfind("-")]
             reaction_to_add["emoji"] = {}
             reaction_to_add["emoji"]["id"] = ""
             if len(emoji_id) == 18:
@@ -121,11 +128,16 @@ def parse_reactions(reactions):
                 reaction_to_add["emoji"]["id"] = emoji_id
             reaction_to_add["emoji"]["name"] = reaction.find("img")["alt"]
             reaction_to_add["emoji"]["code"] = reaction.find("img")["alt"]
-            reaction_to_add["emoji"]["isAnimated"] = False # Don't know how check
-            reaction_to_add["emoji"]["imageUrl"] = clean_and_join_url(SUBFOLDER_PATH, img_path)
-            reaction_to_add["count"] = int(reaction.find("span", "chatlog__reaction-count").get_text().strip())
+            reaction_to_add["emoji"]["isAnimated"] = False  # Don't know how check
+            reaction_to_add["emoji"]["imageUrl"] = clean_and_join_url(
+                SUBFOLDER_PATH, img_path
+            )
+            reaction_to_add["count"] = int(
+                reaction.find("span", "chatlog__reaction-count").get_text().strip()
+            )
             reactions_to_add.append(reaction_to_add)
     return reactions_to_add
+
 
 def process_img(node, content):
     emote_name = str(node["alt"])
@@ -275,7 +287,6 @@ def parse_embeds(embeds):
                 embed_title = embed.find("div", "chatlog__embed-title")
                 if embed_title:
                     embed_to_add["title"] = embed_title.get_text().strip()
-
 
             embed_description = embed.find("div", "chatlog__embed-description")
             embed_to_add["description"] = ""
