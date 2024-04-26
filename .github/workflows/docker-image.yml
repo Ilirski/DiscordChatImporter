@@ -1,0 +1,67 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+  
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      actions: write
+      contents: read
+            - name: docker-slim GitHub Action
+  # You may pin to the exact commit or the version.
+  # uses: kitabisa/docker-slim-action@e641d62304259303c8557c27e10965f7348c7eb4
+  uses: kitabisa/docker-slim-action@v1.1.1
+  with:
+    # Target container image (name or ID)
+    target: 
+    # Specify a tag for slimmed target container image
+    tag: # default is slim
+    # Overwrite target container image with slimmed version (only if target is not ID)
+    overwrite: # optional
+    # Define Slim version
+    version: # optional, default is 
+          
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      -
+        name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/discordsearchscraper
+
+        # Slim the Image
+        - name: docker-slim GitHub Action
+          uses: kitabisa/docker-slim-action@v1.1.1
+          env:
+            DSLIM_HTTP_PROBE: false
+          with: 
+            # Target container image (name or ID)
+            target: ${{ secrets.DOCKERHUB_USERNAME }}/discordsearchscraper
+            tag: ${{ secrets.DOCKERHUB_USERNAME }}/discordsearchscraper
+          
+          # Push to the registry
+        - run: | 
+            docker push ${{ secrets.DOCKERHUB_USERNAME }}/discordsearchscraper
