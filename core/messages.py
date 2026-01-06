@@ -1,20 +1,22 @@
+import contextlib
 import json
+import random
+import re
+from pathlib import Path
+
+import emoji
 from disnake import (
     ApplicationCommandInteraction,
-    Webhook,
-    NotFound,
     ButtonStyle,
-    WebhookMessage,
-    Embed,
     Color,
+    Embed,
     File,
+    NotFound,
     TextChannel,
+    Webhook,
+    WebhookMessage,
 )
-from disnake.ui import Button, ActionRow
-from pathlib import Path
-import random
-import emoji
-import re
+from disnake.ui import ActionRow, Button
 
 
 class FileTooLarge(Exception):
@@ -68,7 +70,7 @@ class MessageHandler:
     @staticmethod
     def load_history(file_name):
         if Path(file_name).exists():
-            with open(file_name, "r") as f:
+            with open(file_name) as f:
                 return json.load(f)
         return {}
 
@@ -87,17 +89,15 @@ class MessageHandler:
         return [first_part, second_part]
 
     def parse_emotes_in_replies(self, text):
-        pattern = r'<:([^:>]*):[^>]*>'
+        pattern = r"<:([^:>]*):[^>]*>"
 
         def replace_func(match):
-            return ':' + match.group(1) + ':'
+            return ":" + match.group(1) + ":"
 
         text = re.sub(pattern, replace_func, text)
         return text
 
-    async def send_reply(
-        self, webhook: Webhook, message, author, avatar_url, reference_id
-    ):
+    async def send_reply(self, webhook: Webhook, message, author, avatar_url, reference_id):
         files = self.upload_attachments(message["attachments"], self.upload_files)
         embeds = self.embed_attachments(message["attachments"], self.upload_files)
 
@@ -106,7 +106,9 @@ class MessageHandler:
             referenced_message = await webhook.channel.fetch_message(reference_id)  # type: ignore
             user_reference_url = referenced_message.jump_url
             user_reference_label = referenced_message.author.display_name
-            message_reference_label: str = self.parse_emotes_in_replies(referenced_message.content)[:80]
+            message_reference_label: str = self.parse_emotes_in_replies(referenced_message.content)[
+                :80
+            ]
             if len(referenced_message.content) == 0:
                 message_reference_label = "No message content"
 
@@ -185,7 +187,7 @@ class MessageHandler:
                 files=files,
                 wait=True,
             )
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             files = []
             files_not_found = []
             for f in message["attachments"]:
@@ -247,10 +249,7 @@ class MessageHandler:
         if upload_files:
             return []
 
-        return [
-            Embed(title="File uploaded", description=f"`{f['fileName']}`")
-            for f in attachments
-        ]
+        return [Embed(title="File uploaded", description=f"`{f['fileName']}`") for f in attachments]
 
     def upload_attachments(self, attachments, upload_files):
         if attachments and not upload_files:
@@ -317,47 +316,37 @@ class MessageHandler:
         avatar_url = message["author"]["avatarUrl"]
         reference_id = ""
         posted_message: WebhookMessage
-        try:
+        with contextlib.suppress(KeyError):
             reference_id = message["reference"]["messageId"]
-        except KeyError:
-            pass
 
         # Check if referenced message is in history
         if reference_id and reference_id in self.message_history:
             # If it is, replace the reference id with the posted message id
             reference_id = self.message_history[reference_id]
 
-        if is_bot:
+        if is_bot or message["embeds"] and not message["content"]:
             posted_message = await self.send_bot(webhook, message, author, avatar_url)
-        elif message["embeds"] and not message["content"]:
-            posted_message = await self.send_bot(
-                webhook, message, author, avatar_url
-            )
         # Either message has reply or no reply
         elif reference_id:
             posted_message = await self.send_reply(
                 webhook, message, author, avatar_url, reference_id
             )
         else:
-            posted_message = await self.send_default(
-                webhook, message, author, avatar_url
-            )
-        print(
-            f"{posted_message.author.name}: {posted_message.content}"
-        )
+            posted_message = await self.send_default(webhook, message, author, avatar_url)
+        print(f"{posted_message.author.name}: {posted_message.content}")
         if posted_message.embeds:
             print(f"Embeds:\n{[embed.title for embed in posted_message.embeds]}")
         if posted_message.attachments:
-            print(f"Attachments:\n{[attachment.filename for attachment in posted_message.attachments]}")
+            print(
+                f"Attachments:\n{[attachment.filename for attachment in posted_message.attachments]}"
+            )
         # Map the message id to the posted message id
         self.message_history[message["id"]] = str(posted_message.id)
 
         if message["isPinned"]:
             await posted_message.pin()
 
-    async def process_messages(
-        self, inter: ApplicationCommandInteraction, start_number, data
-    ):
+    async def process_messages(self, inter: ApplicationCommandInteraction, start_number, data):
         if not isinstance(inter.channel, TextChannel):
             await inter.send(
                 f"ERROR: Cannot import messages to {type(inter.channel)}, channel must be TextChannel."
@@ -379,11 +368,11 @@ class MessageHandler:
         if start_number > 0:
             start = start_number
 
-        print(f"Starting from message {start+1} / {number_of_messages}")
+        print(f"Starting from message {start + 1} / {number_of_messages}")
         print(f"Number of messages: {number_of_messages}")
         try:
             for i, message in enumerate(data["messages"][start:], start=start):
-                print(f"Message {i+1} / {number_of_messages}")
+                print(f"Message {i + 1} / {number_of_messages}")
                 self.channel_history[data["channel"]["name"]] = i
 
                 # Nitro users be like:
@@ -410,7 +399,7 @@ class MessageHandler:
                         await self.handle_message(webhook, message)
                 except Exception as e:
                     await self.channel.send(
-                        f"{self.interactor.mention} Error while processing message no. {i+1}/{number_of_messages} in #{data['channel']['name']}:\n```{e}```"
+                        f"{self.interactor.mention} Error while processing message no. {i + 1}/{number_of_messages} in #{data['channel']['name']}:\n```{e}```"
                     )
                     raise e
                 finally:

@@ -1,7 +1,8 @@
-from core import ImportBot
-from dotenv import load_dotenv
 from os import environ
 
+from dotenv import load_dotenv
+
+from core import ImportBot
 
 if __name__ == "__main__":
     load_dotenv()

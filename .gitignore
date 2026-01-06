@@ -1,3 +1,44 @@
+# uv
+.venv/
+.python-version
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.ipynb_checkpoints/
+
+# Project specific
 archived_channels/
 avatars_hashed/
 new_channels/
@@ -6,10 +47,21 @@ new_channels/
 *.csv
 *.csv/
 *.json
-__pycache__/
-*.py[cod]
-*$py.class
-.vscode/
 *.tsv
 format_json/literature_files
 download_literature_files.py
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+
+# Type checking
+.pyright/
+.pyre/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/

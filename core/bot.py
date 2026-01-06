@@ -1,8 +1,10 @@
 from __future__ import annotations
-from disnake import Activity, ActivityType, Intents
-import os
-from disnake.ext.commands import InteractionBot
+
 import json
+import os
+
+from disnake import Activity, ActivityType, Intents
+from disnake.ext.commands import InteractionBot
 
 
 class ImportBot(InteractionBot):
@@ -18,7 +20,7 @@ class ImportBot(InteractionBot):
 
         # Check if the settings file exists
         if os.path.isfile("settings.json"):
-            with open("settings.json", "r") as f:
+            with open("settings.json") as f:
                 settings = json.load(f)
             self.upload_files = settings.get("upload_files", False)
             self.choose_random_message = settings.get("choose_random_message", False)

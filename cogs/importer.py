@@ -1,10 +1,12 @@
-from disnake.ext import commands
-from disnake import Permissions
 import json
-import disnake
 from pathlib import Path
-from core.messages import MessageHandler
+
+import disnake
+from disnake import Permissions
+from disnake.ext import commands
+
 from core.bot import ImportBot
+from core.messages import MessageHandler
 
 CHANNELS = [
     "discussion",
@@ -15,7 +17,7 @@ CHANNELS = [
     "philosophy",
     "quranic-sciences",
     "social-sciences",
-    "literature"
+    "literature",
 ]
 
 
@@ -31,13 +33,12 @@ class Importer(commands.Cog):
     )
     async def test_import_messages(self, inter: disnake.ApplicationCommandInteraction):
         with open(
-            Path(__file__).parents[1].joinpath(f"archived_channels/test.json"),
-            "r",
+            Path(__file__).parents[1].joinpath("archived_channels/test.json"),
         ) as f:
             data = json.load(f)
-        print(f"Channel: test")
+        print("Channel: test")
         await inter.response.send_message(
-            content=f"Processing messages in test...", ephemeral=True, delete_after=5
+            content="Processing messages in test...", ephemeral=True, delete_after=5
         )
         await self.message_handler.process_messages(inter, 0, data)
 
@@ -53,7 +54,8 @@ class Importer(commands.Cog):
         start_number: int = commands.Param(default=0),
     ):
         with open(
-            Path(__file__).parents[1].joinpath(f"archived_channels/{channel}.json"), "r", encoding="utf-8"
+            Path(__file__).parents[1].joinpath(f"archived_channels/{channel}.json"),
+            encoding="utf-8",
         ) as f:
             data = json.load(f)
 
@@ -83,6 +85,7 @@ class Importer(commands.Cog):
             await disnake.Webhook.delete(webhook)
 
         await inter.channel.send("Deleted all webhooks.")
+
 
 def setup(bot):
     bot.add_cog(Importer(bot))
